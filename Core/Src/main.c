@@ -55,12 +55,8 @@ uint16_t timerange = 200;
 uint64_t upper = 0;
 uint64_t read = 0;
 float linearspeed = 0;
-uint8_t numOfRound = 0;
-uint32_t realPos = 0;
 
 uint32_t QEIReadRaw;
-float Degree;
-float Radian;
 float velodegree;
 
 typedef struct {
@@ -84,7 +80,6 @@ enum {
 
 //motor
 uint16_t duty_cycle = 4000;
-uint8_t DIR = 0;
 
 //LogicConv
 uint8_t Lo1 = 0;
@@ -105,10 +100,11 @@ uint8_t LimitBottom = 0;
 uint8_t x = 0;
 //RelayWrite
 
+//PID
+uint8_t mode = 1;
 float Vfeedback;
 float Goal;
 uint16_t duty_cycle_pid;
-uint8_t mode = 1;
 PID pid_control;
 uint8_t test_change = 1;
 uint8_t test_change_prev = 0;
@@ -205,40 +201,18 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-		// for Testing: change PID
-//		if (test_change != test_change_prev) {
-//			PID_init(&pid_control, pid_p, pid_i, pid_d ,timerange);
-//			test_change_prev = test_change;
-//		}
-		// 63488 step/31rev
-//	  _micros = Micros();
-//	 Degree = QEIReadRaw*360/8192;
-//	 Radian = QEIReadRaw*(2*3.14)/8192;
 		//Call every 0.1 s
 		static uint64_t timestamp = 0;
 		int64_t currentTime = Micros();
 		ReadLimit();
 		if (currentTime > timestamp) {
 			timestamp = currentTime + timerange;	 //us
-//		 QEIReadRaw = __HAL_TIM_GET_COUNTER(&htim3);
 			QEIEncoderPosVel_Update();
-//		 uint32_t diffPos = QEIdata.Position[1] - QEIdata.Position[0];
-//
-//
-//		 if (diffPos > 100 ) {
-//			 numOfRound -= 1;
-//		 }
-//		 if (diffPos < -100) {
-//			 numOfRound += 1;
-//		 }
 
-			realPos = QEIReadRaw + numOfRound * 200;
 			velodegree = QEIdata.QEIAngularVelocity;
 			velodegree = (velodegree * 60) / 800;
 			linearspeed = velodegree * 14 / 60.0;
 
-//		 if(velodegree > 0){HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5,1);}
-//		 else{HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5,0);}
 			if (mode == 1) {
 				ReadButton();
 				if (bt3 == 0) {
@@ -256,11 +230,6 @@ int main(void)
 		}
 
 		ReadLogicConv();
-
-
-//	 ReadButton();
-//	 MotorDrive(0);
-
 
 	}
   /* USER CODE END 3 */
@@ -725,8 +694,7 @@ void QEIEncoderPosVel_Update() {
 	QEIdata.Angle = QEIdata.QEIPostion_1turn[NEW] * 360 / 800;
 	//calculate dx
 	int32_t diffPosition = QEIdata.Position[NEW] - QEIdata.Position[OLD];
-	int32_t diff1turn = QEIdata.QEIPostion_1turn[NEW]
-			- QEIdata.QEIPostion_1turn[OLD];
+	int32_t diff1turn = QEIdata.QEIPostion_1turn[NEW] - QEIdata.QEIPostion_1turn[OLD];
 	//Handle Warp around
 	if (diffPosition > 32400) {
 		diffPosition -= 64800;
