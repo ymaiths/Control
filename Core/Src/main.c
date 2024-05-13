@@ -55,6 +55,7 @@ uint16_t timerange = 200;
 uint64_t upper = 0;
 uint64_t read = 0;
 float linearspeed = 0;
+uint8_t relay[4];
 
 uint32_t QEIReadRaw;
 float velodegree;
@@ -79,13 +80,13 @@ enum {
 };
 
 //motor
-uint16_t duty_cycle = 4000;
+uint16_t duty_cycle = 1000;
 
 //LogicConv
-uint8_t Lo1 = 0;
-uint8_t Lo2 = 0;
-uint8_t Lo3 = 0;
-uint8_t Lo4 = 0;
+uint8_t Lo1 = 0; // foreward leedswitch
+uint8_t Lo2 = 0;// backward
+uint8_t Lo3 = 0; //joy vs pid
+uint8_t Lo4 = 0; //emer
 
 //Botton
 uint8_t bt1 = 0;
@@ -101,9 +102,9 @@ uint8_t x = 0;
 //RelayWrite
 
 //PID
-uint8_t mode = 1;
+uint8_t mode = 2;
 float Vfeedback;
-float Goal;
+float Goal = 0;
 uint16_t duty_cycle_pid;
 PID pid_control;
 uint8_t test_change = 1;
@@ -209,12 +210,12 @@ int main(void)
 			timestamp = currentTime + timerange;	 //us
 			QEIEncoderPosVel_Update();
 
+
 			velodegree = QEIdata.QEIAngularVelocity;
 			velodegree = (velodegree * 60) / 800;
 			linearspeed = velodegree * 14 / 60.0;
 
 			if (mode == 1) {
-				ReadButton();
 				if (bt3 == 0) {
 					HAL_GPIO_WritePin(GPIOC, GPIO_PIN_3, 1);
 					__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, duty_cycle);
@@ -225,10 +226,15 @@ int main(void)
 					__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
 				}
 			} else if (mode == 2) {
-				MotorDrive();
+				//if(bt3 == 0){
+					MotorDrive();
+					//Goal = 600;
+				//}
 			}
-		}
 
+		}
+		RelayDrive();
+		ReadButton();
 		ReadLogicConv();
 
 	}
@@ -714,7 +720,7 @@ void QEIEncoderPosVel_Update() {
 			//calculate dt
 	float diffTime = (QEIdata.TimeStamp[NEW] - QEIdata.TimeStamp[OLD])
 			* 1e-6;
-	//calculate anglar velocity
+	//calculate angular velocity
 	QEIdata.QEIAngularVelocity = diffPosition / diffTime;
 	//store value for next loop
 	QEIdata.Position[OLD] = QEIdata.Position[NEW];
@@ -739,14 +745,19 @@ void ReadButton() {
 }
 
 void ReadLimit() {
-	LimitBottom = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_7); // LimitTop
-	LimitTop = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_6); // LimitBottom
+	LimitTop = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_7); // LimitTop
+	LimitBottom = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_6); // LimitBottom
 
 }
 
 void MotorDrive() {
+	PercentDis = fabs(Goal - QEIdata.TotalPos) * 100 / Goal;
 	if((Goal - QEIdata.TotalPos) > 0.2 || (Goal - QEIdata.TotalPos) < -0.2){
-		Vfeedback = Update_pid(&pid_control, Goal - QEIdata.TotalPos, 8, 9);
+		if( PercentDis <= 20 || PercentDis >= 80){
+			Vfeedback = Update_pid(&pid_control, Goal - QEIdata.TotalPos, 5, 3);
+		}else if( PercentDis > 20 && PercentDis < 80){
+			Vfeedback = Update_pid(&pid_control, Goal - QEIdata.TotalPos, 8, 10);
+		}
 
 		if (Vfeedback > 0) {
 			HAL_GPIO_WritePin(GPIOC, GPIO_PIN_3, 0);
@@ -755,19 +766,23 @@ void MotorDrive() {
 			Vfeedback = Vfeedback * (-1);
 		}
 
-		if(Vfeedback < 0.4 && Vfeedback != 0){
-			Vfeedback = 0.4;
+		if(Vfeedback < 1.5 && Vfeedback != 0){
+			Vfeedback = 1.5;
 		}
 		duty_cycle_pid = Vfeedback * 4000 / 12;
+
+
 		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, duty_cycle_pid);
+	}else{
+
 	}
 }
 
 void RelayDrive() {
-	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, 1); // Relay1
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, 1); // Relay1
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, 1); // Relay1
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, 1); // Relay1
+	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, relay[0]); //
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, relay[1]); // Relay1
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, relay[2]); // Mode status led
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, relay[3]); // Heart beat
 }
 /* USER CODE END 4 */
 
